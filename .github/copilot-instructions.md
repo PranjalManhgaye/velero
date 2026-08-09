@@ -2,10 +2,40 @@
 
 ## Changelog requirement
 
-Velero uses per-PR changelog fragments (created via `make new-changelog`) that are
-assembled into release notes.  A changelog entry is **not** required when a PR
-exclusively changes non-shipping content, i.e. the only files touched belong to
-one or more of these categories:
+Velero uses per-PR changelog fragments that are assembled into release notes.
+
+### File naming convention
+
+Every shipping PR must add exactly **one** file at:
+
+```
+changelogs/unreleased/<PR_NUMBER>-<github_username>
+```
+
+- `<PR_NUMBER>` is the pull request number (e.g. `10200`).
+- `<github_username>` is the GitHub login of the PR author (e.g. `jdoe`).
+- The file has **no extension**.
+- The file content is a single line describing the change (the PR title is a
+  sensible default).
+
+**Example:** PR #10200 by `jdoe` → `changelogs/unreleased/10200-jdoe`
+
+The easiest way to create this file is:
+
+```bash
+make new-changelog CHANGELOG_BODY="Brief description of the change"
+```
+
+`make new-changelog` reads the PR number and author from `gh pr view`; the file
+is written automatically to the correct path with the correct name.
+
+The CI check (`hack/changelog-check.sh`) looks for
+`changelogs/unreleased/<PR_NUMBER>-*` and fails if no file is found.
+
+### When a changelog is NOT required
+
+A changelog entry is **not** required when a PR exclusively changes non-shipping
+content, i.e. the only files touched belong to one or more of these categories:
 
 | Category | Paths |
 |---|---|
@@ -14,10 +44,11 @@ one or more of these categories:
 | Website (non-docs) | `site/**` (excluding `site/content/docs/**`) |
 
 When you open or review a PR that falls into one of the above categories (and does
-**not** modify `pkg/`, `internal/`, `cmd/`, `vendor/`, `hack/`, `go.mod`, or
-`go.sum`), apply the label **`kind/changelog-not-required`** instead of requesting
-a changelog entry.  The `labeler.yml` auto-labeler handles this automatically for
-most cases; apply the label manually if the auto-labeler did not.
+**not** modify `pkg/`, `internal/`, `cmd/`, `vendor/`, `hack/`, `Makefile`,
+`go.mod`, `go.sum`, or `changelogs/**`), apply the label
+**`kind/changelog-not-required`** instead of requesting a changelog entry.  The
+`labeler.yml` auto-labeler handles this automatically for most cases; apply the
+label manually if the auto-labeler did not.
 
 ## Backport / cherry-pick workflow
 

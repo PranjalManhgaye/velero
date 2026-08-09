@@ -51,3 +51,5 @@ kind/changelog-not-required:
               - '!Makefile'
               - '!go.mod'
               - '!go.sum'
+              - '!changelogs/**'
+              - '!**/*.go'
