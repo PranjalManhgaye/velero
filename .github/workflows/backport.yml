@@ -81,7 +81,7 @@ jobs:
           # Strip the /backport or /cherrypick prefix; what remains is a
           # space-delimited list of target branch names.
           line=$(printf '%s' "$COMMENT_BODY" | head -n1 | tr -d '\r')
-          branches=$(printf '%s' "$line" | sed -E 's|^/(backport|cherrypick)[[:space:]]*||')
+          branches=$(printf '%s' "$line" | sed -E 's#^/(backport|cherrypick)[[:space:]]*##')
 
           if [ -z "$branches" ]; then
             echo "No target branches specified in comment; nothing to label."
@@ -140,7 +140,7 @@ jobs:
           # Remaining text is a space-delimited list of target branches
           # (may be empty, falls back to labels).
           line=$(printf '%s' "$COMMENT_BODY" | head -n1 | tr -d '\r')
-          branches=$(printf '%s' "$line" | sed -E 's|^/(backport|cherrypick)[[:space:]]*||')
+          branches=$(printf '%s' "$line" | sed -E 's#^/(backport|cherrypick)[[:space:]]*##')
           echo "branches=${branches}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v7
