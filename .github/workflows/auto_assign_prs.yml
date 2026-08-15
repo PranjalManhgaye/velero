@@ -41,10 +41,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Save PR number to artifact
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           mkdir -p /tmp/pr
           # Write only the numeric PR number; the privileged workflow validates this.
-          printf '%s' '${{ github.event.pull_request.number }}' > /tmp/pr/number
+          printf '%s' "${PR_NUMBER}" > /tmp/pr/number
       - name: Upload PR number artifact
         uses: actions/upload-artifact@v4
         with:
