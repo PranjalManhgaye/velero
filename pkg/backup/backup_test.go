@@ -1409,7 +1409,7 @@ func TestBackupItemActionsForSkippedPV(t *testing.T) {
 			},
 		},
 		{
-			name: "backup item action returns the 'not a CSI volume' error and the PV should be tracked as skippedPV",
+			name:      "backup item action returns the 'not a CSI volume' error and the PV should be tracked as skippedPV",
 			enableCSI: true,
 			backupReq: &Request{
 				Backup:           defaultBackup().SnapshotVolumes(false).Result(),
@@ -1450,7 +1450,7 @@ func TestBackupItemActionsForSkippedPV(t *testing.T) {
 			},
 		},
 		{
-			name: "backup item action named as CSI plugin executed successfully and the PV will be removed from the skipped PV tracker",
+			name:      "backup item action named as CSI plugin executed successfully and the PV will be removed from the skipped PV tracker",
 			enableCSI: true,
 			backupReq: &Request{
 				Backup: defaultBackup().Result(),
