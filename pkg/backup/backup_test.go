@@ -1374,12 +1374,43 @@ func TestBackupItemActionsForSkippedPV(t *testing.T) {
 		runtimeResources []runtime.Object
 		actions          []*recordResourcesAction
 		resPolicies      *resourcepolicies.ResourcePolicies
+		enableCSI        bool
 		// {pvName:{approach: reason}}
 		expectSkippedPVs    map[string]map[string]string
 		expectNotSkippedPVs []string
 	}{
 		{
+			name: "snapshot-move-data with EnableCSI off skips CSI BIA and tracks the PVC's PV with EnableCSI reason",
+			backupReq: &Request{
+				Backup:           defaultBackup().SnapshotMoveData(true).Result(),
+				SkippedPVTracker: NewSkipPVTracker(),
+				BackedUpItems:    NewBackedUpItemsMap(),
+				WorkerPool:       itemBlockPool,
+			},
+			apiResources: []*test.APIResource{
+				test.PVCs(
+					builder.ForPersistentVolumeClaim("ns-1", "pvc-1").VolumeName("pv-1").Phase(corev1api.ClaimBound).Result(),
+				),
+				test.PVs(
+					builder.ForPersistentVolume("pv-1").CSI("driver.csi", "vol-1").Result(),
+				),
+			},
+			runtimeResources: []runtime.Object{
+				builder.ForPersistentVolumeClaim("ns-1", "pvc-1").VolumeName("pv-1").Phase(corev1api.ClaimBound).Result(),
+				builder.ForPersistentVolume("pv-1").CSI("driver.csi", "vol-1").Result(),
+			},
+			actions: []*recordResourcesAction{
+				new(recordResourcesAction).WithName(csiBIAPluginName).ForNamespace("ns-1").ForResource("persistentvolumeclaims"),
+			},
+			expectSkippedPVs: map[string]map[string]string{
+				"pv-1": {
+					csiSnapshotApproach: "snapshot-move-data requires EnableCSI feature, which is not enabled",
+				},
+			},
+		},
+		{
 			name: "backup item action returns the 'not a CSI volume' error and the PV should be tracked as skippedPV",
+			enableCSI: true,
 			backupReq: &Request{
 				Backup:           defaultBackup().SnapshotVolumes(false).Result(),
 				SkippedPVTracker: NewSkipPVTracker(),
@@ -1420,6 +1451,7 @@ func TestBackupItemActionsForSkippedPV(t *testing.T) {
 		},
 		{
 			name: "backup item action named as CSI plugin executed successfully and the PV will be removed from the skipped PV tracker",
+			enableCSI: true,
 			backupReq: &Request{
 				Backup: defaultBackup().Result(),
 				SkippedPVTracker: &skipPVTracker{
@@ -1457,6 +1489,12 @@ func TestBackupItemActionsForSkippedPV(t *testing.T) {
 	}()
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
+			features.NewFeatureFlagSet("")
+			defer features.NewFeatureFlagSet("")
+			if tc.enableCSI {
+				features.Enable(velerov1.CSIFeatureFlag)
+			}
+
 			var (
 				h          = newHarness(t, itemBlockPool)
 				backupFile = bytes.NewBuffer([]byte{})
@@ -3306,10 +3344,45 @@ func TestBackupWithSnapshots(t *testing.T) {
 			},
 			wantSkippedPVs: []SkippedPV{},
 		},
+		{
+			name: "CSI PV with snapshot-move-data and EnableCSI off tracks EnableCSI skip reason",
+			req: &Request{
+				Backup: defaultBackup().SnapshotMoveData(true).Result(),
+				SnapshotLocations: []*velerov1.VolumeSnapshotLocation{
+					newSnapshotLocation("velero", "default", "default"),
+				},
+				SkippedPVTracker: NewSkipPVTracker(),
+				BackedUpItems:    NewBackedUpItemsMap(),
+				WorkerPool:       itemBlockPool,
+			},
+			apiResources: []*test.APIResource{
+				test.PVs(
+					builder.ForPersistentVolume("pv-1").CSI("driver.csi", "vol-1").Result(),
+				),
+			},
+			snapshotterGetter: map[string]vsv1.VolumeSnapshotter{
+				"default": new(fakeVolumeSnapshotter),
+			},
+			want: nil,
+			wantSkippedPVs: []SkippedPV{
+				{
+					Name: "pv-1",
+					Reasons: []PVSkipReason{
+						{
+							Approach: volumeSnapshotApproach,
+							Reason:   "snapshot-move-data requires EnableCSI feature, which is not enabled",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			features.NewFeatureFlagSet("")
+			defer features.NewFeatureFlagSet("")
+
 			var (
 				h          = newHarness(t, itemBlockPool)
 				backupFile = bytes.NewBuffer([]byte{})
