@@ -846,6 +846,25 @@ func TestBackupDeletionControllerReconcile(t *testing.T) {
 		assert.True(t, apierrors.IsNotFound(err), "Expected backup CR to be deleted after retrying InProgress request, but actual error: %v", err)
 	})
 
+	t.Run("InProgress request with missing backup completes successfully on retry", func(t *testing.T) {
+		input := defaultTestDbr()
+		input.Status.Phase = velerov1api.DeleteBackupRequestPhaseInProgress
+		input.Labels = map[string]string{
+			velerov1api.BackupNameLabel: label.GetValidName(input.Spec.BackupName),
+			velerov1api.BackupUIDLabel:  "uid",
+		}
+
+		td := setupBackupDeletionControllerTest(t, input)
+
+		_, err := td.controller.Reconcile(t.Context(), td.req)
+		require.NoError(t, err)
+
+		res := &velerov1api.DeleteBackupRequest{}
+		err = td.fakeClient.Get(ctx, td.req.NamespacedName, res)
+		assert.True(t, apierrors.IsNotFound(err), "Expected DBR to be deleted after successful retry, but actual error: %v", err)
+		td.backupStore.AssertNotCalled(t, "DeleteBackup", mock.Anything)
+	})
+
 	t.Run("Expired InProgress request is re-processed instead of deleted", func(t *testing.T) {
 		expired := time.Date(2018, 4, 3, 12, 0, 0, 0, time.UTC)
 		input := defaultTestDbr()
@@ -853,19 +872,19 @@ func TestBackupDeletionControllerReconcile(t *testing.T) {
 			Time: expired,
 		}
 		input.Status.Phase = velerov1api.DeleteBackupRequestPhaseInProgress
+		input.Labels = map[string]string{
+			velerov1api.BackupNameLabel: label.GetValidName(input.Spec.BackupName),
+			velerov1api.BackupUIDLabel:  "uid",
+		}
 
 		td := setupBackupDeletionControllerTest(t, input)
-		td.backupStore.On("DeleteBackup", mock.Anything).Return(nil)
 
 		_, err := td.controller.Reconcile(t.Context(), td.req)
 		require.NoError(t, err)
 
 		res := &velerov1api.DeleteBackupRequest{}
 		err = td.fakeClient.Get(ctx, td.req.NamespacedName, res)
-		require.NoError(t, err)
-		assert.Equal(t, "Processed", string(res.Status.Phase))
-		assert.Len(t, res.Status.Errors, 1)
-		assert.Equal(t, "backup not found", res.Status.Errors[0])
+		assert.True(t, apierrors.IsNotFound(err), "Expected DBR to be deleted after successful retry, but actual error: %v", err)
 	})
 
 	t.Run("Expired request will not be deleted if the status is not processed", func(t *testing.T) {
