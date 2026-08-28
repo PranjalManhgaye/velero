@@ -22,8 +22,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1api "k8s.io/api/apps/v1"
+	corev1api "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/vmware-tanzu/velero/pkg/cmd/server/config"
+	"github.com/vmware-tanzu/velero/pkg/install"
 )
 
 func TestParseServerArgs(t *testing.T) {
@@ -52,4 +57,70 @@ func TestParseServerArgs(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 30*time.Second, cfg.StoreValidationFrequency)
 	})
+}
+
+func TestGetStoreValidationFrequencyFallback(t *testing.T) {
+	t.Parallel()
+
+	defaultFrequency := config.GetDefaultConfig().StoreValidationFrequency
+
+	assert.Equal(t, defaultFrequency, GetStoreValidationFrequency(t.Context(), nil, "velero"))
+
+	clientset := fake.NewSimpleClientset()
+	assert.Equal(t, defaultFrequency, GetStoreValidationFrequency(t.Context(), clientset, "velero"))
+}
+
+func TestGetStoreValidationFrequencyFromDeployment(t *testing.T) {
+	t.Parallel()
+
+	deployment := veleroDeploymentWithArgs("velero", []string{"server", "--store-validation-frequency", "5m"})
+	clientset := fake.NewSimpleClientset(deployment)
+
+	assert.Equal(t, 5*time.Minute, GetStoreValidationFrequency(t.Context(), clientset, "velero"))
+}
+
+func TestGetStoreValidationFrequencyNoVeleroContainer(t *testing.T) {
+	t.Parallel()
+
+	deployment := &appsv1api.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "velero",
+			Name:      "velero",
+			Labels:    install.Labels(),
+		},
+		Spec: appsv1api.DeploymentSpec{
+			Template: corev1api.PodTemplateSpec{
+				Spec: corev1api.PodSpec{
+					Containers: []corev1api.Container{{
+						Name: "not-velero",
+						Args: []string{"server", "--store-validation-frequency", "5m"},
+					}},
+				},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(deployment)
+	defaultFrequency := config.GetDefaultConfig().StoreValidationFrequency
+	assert.Equal(t, defaultFrequency, GetStoreValidationFrequency(t.Context(), clientset, "velero"))
+}
+
+func veleroDeploymentWithArgs(namespace string, args []string) *appsv1api.Deployment {
+	return &appsv1api.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      "velero",
+			Labels:    install.Labels(),
+		},
+		Spec: appsv1api.DeploymentSpec{
+			Template: corev1api.PodTemplateSpec{
+				Spec: corev1api.PodSpec{
+					Containers: []corev1api.Container{{
+						Name: "velero",
+						Args: args,
+					}},
+				},
+			},
+		},
+	}
 }

@@ -39,6 +39,10 @@ var errVeleroDeploymentNotFound = errors.New("velero deployment not found")
 func GetStoreValidationFrequency(ctx context.Context, kubeClient kubernetes.Interface, namespace string) time.Duration {
 	defaultFrequency := config.GetDefaultConfig().StoreValidationFrequency
 
+	if kubeClient == nil {
+		return defaultFrequency
+	}
+
 	deployment, err := veleroDeployment(ctx, kubeClient, namespace)
 	if err != nil {
 		return defaultFrequency
